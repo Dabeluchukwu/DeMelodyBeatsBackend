@@ -1,0 +1,363 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Update the User model
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(EDITOR)
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  posts     Post[]
+  
+  // Tracking relations
+  createdShows     Show[]    @relation("createdBy")
+  updatedShows     Show[]    @relation("updatedBy")
+  createdReleases  Release[] @relation("createdBy")
+  updatedReleases  Release[] @relation("updatedBy")
+  createdMembers   Member[]  @relation("createdBy")
+  updatedMembers   Member[]  @relation("updatedBy")
+  createdPhotos    Photo[]   @relation("createdBy")
+  updatedPhotos    Photo[]   @relation("updatedBy")
+  createdVideos    Video[]   @relation("createdBy")
+  updatedVideos    Video[]   @relation("updatedBy")
+  
+  // Messages - track which admin replied
+  repliedMessages Message[] @relation("repliedBy")
+  
+  // Audit logs
+  auditLogs AuditLog[] @relation("user")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+}
+
+// Audit Log Model
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String   // CREATE, UPDATE, DELETE
+  entity      String   // Show, Member, Release, Photo, Video, User
+  entityId    String
+  changes     Json?    // Before/after JSON
+  userId      String
+  user        User     @relation("user", fields: [userId], references: [id])
+  userEmail   String
+  userRole    Role
+  createdAt   DateTime @default(now())
+}
+
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  firstName String?
+  city      String?
+  country   String?
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  campaigns CampaignSubscriber[]
+}
+
+model Show {
+  id          String   @id @default(cuid())
+  title       String
+  venue       String
+  city        String
+  state       String?
+  country     String
+  date        DateTime
+  doorsTime   String?
+  ageRestriction String?
+  ticketUrl   String?
+  posterImage String?
+  supportActs String[]
+  isPast      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Tracking fields
+  createdBy   User     @relation("createdBy", fields: [createdById], references: [id])
+  createdById String
+  updatedBy   User?    @relation("updatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+}
+
+model Release {
+  id          String   @id @default(cuid())
+  title       String
+  type        ReleaseType
+  releaseDate DateTime
+  coverArt    String
+  description String?
+  tracklist   Json
+  spotifyUrl  String?
+  appleMusicUrl String?
+  bandcampUrl String?
+  youtubeUrl  String?
+  purchaseUrl String?
+  isFeatured  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  songs       Song[]
+  
+  // Tracking fields
+  createdBy   User     @relation("createdBy", fields: [createdById], references: [id])
+  createdById String
+  updatedBy   User?    @relation("updatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+}
+
+enum ReleaseType {
+  SINGLE
+  EP
+  ALBUM
+}
+
+model Song {
+  id          String   @id @default(cuid())
+  title       String
+  duration    String?
+  lyrics      String?
+  isExplicit  Boolean  @default(false)
+  order       Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  releaseId   String
+  release     Release  @relation(fields: [releaseId], references: [id])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  currency    String   @default("NGN")
+  category    ProductCategory
+  variants    Json?
+  stock       Int?
+  images      String[]
+  isBundle    Boolean  @default(false)
+  bundleItems Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  orders      OrderItem[]
+}
+
+enum ProductCategory {
+  APPAREL
+  VINYL
+  CD
+  DIGITAL
+  BUNDLE
+  OTHER
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  orderNumber String   @unique
+  customerEmail String
+  customerName  String
+  shippingAddress Json
+  billingAddress  Json?
+  total       Float
+  status      OrderStatus @default(PENDING)
+  paymentId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  items       OrderItem[]
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  quantity    Int
+  price       Float
+  variant     Json?
+  createdAt   DateTime @default(now())
+  
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  excerpt     String?
+  content     String
+  coverImage  String?
+  category    PostCategory @default(GENERAL)
+  isPublished Boolean  @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  comments    Comment[]
+}
+
+enum PostCategory {
+  NEWS
+  TOUR
+  STUDIO
+  GENERAL
+}
+
+model Comment {
+  id          String   @id @default(cuid())
+  content     String
+  authorName  String
+  authorEmail String?
+  isApproved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id])
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  subject     String
+  content     String
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+  
+  recipients  CampaignSubscriber[]
+}
+
+model CampaignSubscriber {
+  id           String @id @default(cuid())
+  opened       Boolean @default(false)
+  clicked      Boolean @default(false)
+  openedAt     DateTime?
+  clickedAt    DateTime?
+  
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id])
+  subscriberId String
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+  
+  @@unique([campaignId, subscriberId])
+}
+
+model PressKit {
+  id          String   @id @default(cuid())
+  version     String
+  fileUrl     String
+  fileName    String
+  fileSize    Int
+  uploadedAt  DateTime @default(now())
+  isActive    Boolean  @default(true)
+  uploadedBy  String
+}
+
+model Member {
+  id          String   @id @default(cuid())
+  name        String
+  role        String
+  bio         String?
+  image       String?
+  socialLinks Json?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  isFounder   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Tracking fields
+  createdBy   User     @relation("createdBy", fields: [createdById], references: [id])
+  createdById String
+  updatedBy   User?    @relation("updatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+}
+
+
+model Photo {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  imageUrl    String
+  thumbnail   String?
+  category    String?
+  date        DateTime @default(now())
+  order       Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Tracking fields
+  createdBy   User     @relation("createdBy", fields: [createdById], references: [id])
+  createdById String
+  updatedBy   User?    @relation("updatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+}
+
+model Video {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  videoId     String
+  thumbnail   String?
+  category    String?
+  date        DateTime @default(now())
+  order       Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Tracking fields
+  createdBy   User     @relation("createdBy", fields: [createdById], references: [id])
+  createdById String
+  updatedBy   User?    @relation("updatedBy", fields: [updatedById], references: [id])
+  updatedById String?
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  name        String
+  email       String
+  subject     String?
+  message     String
+  reply       String?   
+  isRead      Boolean  @default(false)
+  isReplied   Boolean  @default(false)
+  repliedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Track which admin replied
+  repliedById String?
+  repliedBy   User?    @relation("repliedBy", fields: [repliedById], references: [id])
+}
